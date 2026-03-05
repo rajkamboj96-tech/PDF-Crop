@@ -1,0 +1,321 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Cropper - Sidebar Layout</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+        
+        /* Layout */
+        .main-container { display: flex; flex-direction: row; height: 100vh; width: 100vw; background-color: #f0f2f5; }
+        
+        /* Left Sidebar (Vertical Controls) */
+        .controls-panel { width: 220px; background: white; padding: 15px; border-right: 1px solid #ddd; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
+        
+        h3 { margin-top: 0; margin-bottom: 10px; font-size: 16px; text-align: center; color: #444; }
+        .file-input-group { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 5px; }
+        .file-input-group label { font-size: 13px; font-weight: bold; margin-bottom: 5px; display: block;}
+        input[type="file"] { width: 100%; font-size: 12px; }
+        
+        .file-status { font-size: 12px; color: #666; font-weight: bold; text-align: center; margin: 5px 0; word-break: break-all;}
+
+        /* Smaller Buttons arranged vertically */
+        .btn { padding: 8px 10px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; font-size: 12px; text-align: center; width: 100%; transition: background 0.2s; }
+        .btn:disabled { background: #e0e0e0 !important; color: #a0a0a0 !important; cursor: not-allowed; }
+        
+        .btn-primary { background: #007bff; color: white; }
+        .btn-primary:hover { background: #0056b3; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-success:hover { background: #218838; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a621d; }
+        .btn-dark { background: #343a40; color: white; }
+        .btn-dark:hover { background: #23272b; }
+
+        /* Right Side (Image Area) */
+        #image-wrapper { flex-grow: 1; position: relative; display: none; background-color: #d1d1d1; padding: 10px; }
+        #image-container { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        img { max-width: 100%; max-height: 100%; display: block; }
+
+        /* Loading Overlay */
+        #loading-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 10; justify-content: center; align-items: center; flex-direction: column; font-weight: bold; color: #555; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin-bottom: 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Custom Cropper Styles (Red / Dark) */
+        .cropper-view-box { outline: 2px solid rgba(255, 0, 0, 0.9); outline-color: rgba(255, 0, 0, 0.9); }
+        .cropper-line { background-color: rgba(255, 0, 0, 0.8); }
+        .cropper-point { background-color: rgba(139, 0, 0, 1); opacity: 1; height: 8px; width: 8px; }
+        .cropper-center:after, .cropper-center:before { background-color: rgba(139, 0, 0, 1); }
+        .cropper-dashed { border-color: rgba(255, 0, 0, 0.5); }
+    </style>
+</head>
+<body>
+
+    <div class="main-container" id="app-container">
+        
+        <div class="controls-panel">
+            <h3>PDF Cropper</h3>
+            
+            <div class="file-input-group">
+                <label for="upload-pdf">Select PDF(s)</label>
+                <input type="file" id="upload-pdf" accept="application/pdf" multiple>
+            </div>
+
+            <div class="file-status" id="file-status">No files loaded</div>
+
+            <button id="btn-prev" class="btn btn-secondary" disabled>&laquo; Previous PDF</button>
+            <button id="btn-next" class="btn btn-secondary" disabled>Next PDF &raquo;</button>
+            
+            <hr style="width: 100%; border: 0; border-top: 1px solid #eee; margin: 5px 0;">
+
+            <button id="btn-clear" class="btn btn-danger" disabled>Clear Selection</button>
+            <button id="btn-save-img" class="btn btn-success" disabled>Save PNG</button>
+            <button id="btn-save-pdf" class="btn btn-success" disabled>Save PDF</button>
+            
+            <hr style="width: 100%; border: 0; border-top: 1px solid #eee; margin: 5px 0;">
+
+            <button id="btn-fullscreen" class="btn btn-dark">Full Screen</button>
+            <button id="btn-exit-fullscreen" class="btn btn-dark" style="display:none;">Exit Full Screen</button>
+        </div>
+
+        <div id="image-wrapper">
+            <div id="loading-overlay">
+                <div class="spinner"></div>
+                <span id="loading-text">Rendering High-Res PDF...</span>
+            </div>
+            <div id="image-container">
+                <img id="pdf-image" src="" alt="PDF Page">
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        const RENDER_SCALE = 4.0;
+        let cropper = null;
+        let pdfFileList = [];
+        let currentFileIndex = -1;
+
+        const els = {
+            appContainer: document.getElementById('app-container'),
+            input: document.getElementById('upload-pdf'),
+            image: document.getElementById('pdf-image'),
+            wrapper: document.getElementById('image-wrapper'),
+            status: document.getElementById('file-status'),
+            loading: document.getElementById('loading-overlay'),
+            loadingText: document.getElementById('loading-text'),
+            btnPrev: document.getElementById('btn-prev'),
+            btnNext: document.getElementById('btn-next'),
+            btnClear: document.getElementById('btn-clear'),
+            btnSaveImg: document.getElementById('btn-save-img'),
+            btnSavePdf: document.getElementById('btn-save-pdf'),
+            btnFullscreen: document.getElementById('btn-fullscreen'),
+            btnExitFullscreen: document.getElementById('btn-exit-fullscreen')
+        };
+
+        // --- 1. File Upload ---
+        els.input.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                pdfFileList = Array.from(e.target.files).filter(file => file.type === 'application/pdf');
+                if (pdfFileList.length === 0) {
+                    alert("Please select valid PDF files.");
+                    resetState();
+                    return;
+                }
+                currentFileIndex = 0;
+                loadCurrentPDF();
+            }
+        });
+
+        function loadCurrentPDF() {
+            if (currentFileIndex < 0 || currentFileIndex >= pdfFileList.length) return;
+
+            const file = pdfFileList[currentFileIndex];
+            updateNavigationUI();
+            
+            if (cropper) { cropper.destroy(); cropper = null; }
+
+            els.image.src = '';
+            els.wrapper.style.display = 'flex';
+            showLoading("Rendering High-Res PDF...");
+            setExportButtonsDisabled(true);
+
+            const fileReader = new FileReader();
+            fileReader.onload = function() {
+                const typedarray = new Uint8Array(this.result);
+                renderPDFPage(typedarray);
+            };
+            fileReader.readAsArrayBuffer(file);
+        }
+
+        function renderPDFPage(data) {
+            pdfjsLib.getDocument(data).promise.then(pdf => {
+                return pdf.getPage(1);
+            }).then(page => {
+                const viewport = page.getViewport({ scale: RENDER_SCALE });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                return page.render({ canvasContext: context, viewport: viewport }).promise.then(() => canvas);
+            }).then(canvas => {
+                els.image.src = canvas.toDataURL('image/png');
+                els.image.onload = () => {
+                    initCropper();
+                    hideLoading();
+                    setExportButtonsDisabled(false);
+                };
+            }).catch(err => {
+                console.error('Error:', err);
+                hideLoading();
+            });
+        }
+
+        // --- 2. Cropper Initialization ---
+        function initCropper() {
+            if (cropper) cropper.destroy();
+            
+            cropper = new Cropper(els.image, {
+                viewMode: 1,
+                autoCrop: false,      // NEW: Do not automatically create a selection box
+                dragMode: 'crop',     // NEW: Default mouse action is to draw a new crop box
+                background: false,
+                ready() { els.btnClear.disabled = false; }
+            });
+        }
+
+        // --- 3. Right-Click to Unselect ---
+        els.wrapper.addEventListener('contextmenu', function(e) {
+            e.preventDefault(); // Stop standard browser right-click menu
+            if (cropper) {
+                cropper.clear(); // Remove the selection box
+            }
+        });
+
+        // --- 4. Controls & Navigation ---
+        els.btnPrev.addEventListener('click', () => { if (currentFileIndex > 0) { currentFileIndex--; loadCurrentPDF(); } });
+        els.btnNext.addEventListener('click', () => { if (currentFileIndex < pdfFileList.length - 1) { currentFileIndex++; loadCurrentPDF(); } });
+        els.btnClear.addEventListener('click', () => { if (cropper) cropper.clear(); });
+
+        function updateNavigationUI() {
+            if (pdfFileList.length > 0) {
+                els.status.textContent = `[${currentFileIndex + 1}/${pdfFileList.length}] ${pdfFileList[currentFileIndex].name}`;
+                els.btnPrev.disabled = (currentFileIndex === 0);
+                els.btnNext.disabled = (currentFileIndex === pdfFileList.length - 1);
+            } else { resetState(); }
+        }
+
+        function setExportButtonsDisabled(disabled) {
+            els.btnSaveImg.disabled = disabled;
+            els.btnSavePdf.disabled = disabled;
+            els.btnClear.disabled = disabled;
+        }
+
+        function resetState() {
+            if (cropper) cropper.destroy();
+            cropper = null;
+            pdfFileList = [];
+            currentFileIndex = -1;
+            els.wrapper.style.display = 'none';
+            els.status.textContent = "No files loaded";
+            els.btnPrev.disabled = true;
+            els.btnNext.disabled = true;
+            els.input.value = '';
+            setExportButtonsDisabled(true);
+        }
+
+        function showLoading(text) {
+            els.loadingText.textContent = text;
+            els.loading.style.display = 'flex';
+        }
+        function hideLoading() { els.loading.style.display = 'none'; }
+
+        // --- 5. Full Screen Logic ---
+        els.btnFullscreen.addEventListener('click', () => {
+            if (els.appContainer.requestFullscreen) {
+                els.appContainer.requestFullscreen();
+            }
+        });
+
+        els.btnExitFullscreen.addEventListener('click', () => {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                els.btnFullscreen.style.display = 'none';
+                els.btnExitFullscreen.style.display = 'block';
+            } else {
+                els.btnFullscreen.style.display = 'block';
+                els.btnExitFullscreen.style.display = 'none';
+            }
+        });
+
+        // --- 6. Exporting ---
+        function getHQCroppedCanvas() {
+            if (!cropper) return null;
+            
+            // Check if there is an actual crop box. If width/height is 0, nothing is selected.
+            const cropData = cropper.getData();
+            if (cropData.width === 0 || cropData.height === 0) return null;
+
+            return cropper.getCroppedCanvas({ imageSmoothingEnabled: true, imageSmoothingQuality: 'high' });
+        }
+
+        els.btnSaveImg.addEventListener('click', () => {
+            const croppedCanvas = getHQCroppedCanvas();
+            if (!croppedCanvas) { alert("Please draw a selection area first."); return; }
+            
+            showLoading("Generating PNG...");
+            setTimeout(() => {
+                const link = document.createElement('a');
+                const origName = pdfFileList[currentFileIndex].name.replace(/\.[^/.]+$/, "");
+                link.download = `${origName}_cropped.png`;
+                link.href = croppedCanvas.toDataURL('image/png');
+                link.click();
+                hideLoading();
+            }, 50);
+        });
+
+        els.btnSavePdf.addEventListener('click', () => {
+            const croppedCanvas = getHQCroppedCanvas();
+            if (!croppedCanvas) { alert("Please draw a selection area first."); return; }
+
+            showLoading("Generating PDF...");
+            setTimeout(() => {
+                const imgData = croppedCanvas.toDataURL('image/png');
+                const widthInPoints = croppedCanvas.width / RENDER_SCALE;
+                const heightInPoints = croppedCanvas.height / RENDER_SCALE;
+                
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: widthInPoints > heightInPoints ? 'landscape' : 'portrait',
+                    unit: 'pt',
+                    format: [widthInPoints, heightInPoints]
+                });
+
+                pdf.addImage(imgData, 'PNG', 0, 0, widthInPoints, heightInPoints, undefined, 'FAST');
+                const origName = pdfFileList[currentFileIndex].name.replace(/\.[^/.]+$/, "");
+                pdf.save(`${origName}_cropped.pdf`);
+                hideLoading();
+            }, 50);
+        });
+    </script>
+</body>
+</html>
